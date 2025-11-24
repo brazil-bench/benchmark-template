@@ -1,1 +1,1 @@
-# files needed to setup a new benchmark repo
+# Spec to create a new repo for a benchmark run
