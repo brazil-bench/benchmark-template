@@ -1,452 +1,390 @@
-# Brazilian Soccer MCP Knowledge Graph - Implementation Guide
+# Brazilian Soccer MCP Server - Specification
 
 ## Overview
-This document outlines the complete plan for creating an MCP (Model Context Protocol) knowledge graph focused on Brazilian soccer players, teams, and games. This is designed for a demo using free data sources.
+
+This document specifies the requirements for creating an MCP (Model Context Protocol) server that provides a knowledge graph interface for Brazilian soccer data. The server should enable natural language queries about players, teams, matches, and competitions using the provided datasets.
 
 ---
 
-## Project Requirements
+## Purpose
 
-- **Purpose**: Demo/Non-commercial use
-- **Data Access**: Free sources only
-- **Real-time Updates**: Not required
-- **Integration**: MCP server connected to Claude for natural language queries
-
----
-
-## Data Sources
-
-### Primary Data Sources (Recommended)
-
-#### 1. Kaggle Datasets (Best for Starting)
-**Advantages:**
-- Completely free
-- No API rate limits
-- Downloadable CSV/JSON files
-- Good historical data
-- No registration barriers
-
-**Key Datasets:**
-- **Brazilian Soccer Database** (jogos-do-campeonato-brasileiro)
-  - Covers matches of main competitions
-  - URL: https://www.kaggle.com/datasets/ricardomattos05/jogos-do-campeonato-brasileiro
-  
-- **Brazilian Football Matches**
-  - 14,406+ matches from main Brazilian leagues
-  - URL: https://www.kaggle.com/datasets/cuecacuela/brazilian-football-matches
-
-- **Brazilian Soccer League (2003-2019)**
-  - Historical league data
-  - URL: https://www.kaggle.com/datasets/macedojleo/campeonato-brasileiro-2003-a-2019
-
-#### 2. API-Football (api-football.com)
-**Features:**
-- Free plan with access to all endpoints
-- No credit card required
-- Covers Brasil Serie A and 1,100+ competitions
-- Always remains free (with limitations)
-
-**Limitations:**
-- Daily request limits on free tier
-- Good for supplemental data
-
-**Access:** Register at https://dashboard.api-football.com/
-
-#### 3. TheSportsDB
-**Features:**
-- Free JSON sports API
-- Data for Brazilian Serie A and Copa do Brasil
-- Team logos and artwork
-- Player photos
-
-**Access:**
-- Free test key: "123"
-- Documentation: https://www.thesportsdb.com/documentation
-- Limited to 2 requests per minute on free tier
-
-#### 4. Other Data Sources
-- **Wikipedia/DBpedia**: Structured data about notable players, teams, tournaments
-- **International Football Results**: 47,000+ international matches (Kaggle)
-- **Transfermarkt Data**: Available through Kaggle datasets (scraped)
-
-### Recommended Implementation Strategy
-
-**Phase 1 - Core Data (Offline)**
-- Download Kaggle Brazilian Football Matches dataset
-- Provides: Teams, players, match results, competitions
-- No API limits during development
-
-**Phase 2 - Enhancement (API)**
-- Use TheSportsDB for team logos/artwork and player photos
-- Use API-Football for current season data (optional)
+- **Use Case**: Demo/Non-commercial use
+- **Goal**: Create an MCP server that can answer natural language questions about Brazilian soccer
+- **Integration**: MCP server connected to an LLM for query processing
 
 ---
 
-## MCP Server Architecture
+## Provided Data
 
-### Graph Schema Design
+The following datasets are included in `data/kaggle/` and must be used:
 
-#### Core Entities
-1. **Player**
-   - Properties: name, birth_date, nationality, position, jersey_number
-   - Unique ID: player_id
+### Match Data
 
-2. **Team**
-   - Properties: name, city, stadium, founded_year, colors
-   - Unique ID: team_id
+#### 1. Brasileirão Serie A Matches
+**File**: `Brasileirao_Matches.csv` (4,180 matches)
+**Source**: https://www.kaggle.com/datasets/ricardomattos05/jogos-do-campeonato-brasileiro
+**License**: CC BY 4.0
 
-3. **Match**
-   - Properties: date, home_score, away_score, competition, attendance
-   - Unique ID: match_id
+| Column | Description |
+|--------|-------------|
+| datetime | Match date and time |
+| home_team | Home team name with state suffix (e.g., "Palmeiras-SP") |
+| home_team_state | State abbreviation |
+| away_team | Away team name with state suffix |
+| away_team_state | State abbreviation |
+| home_goal | Goals scored by home team |
+| away_goal | Goals scored by away team |
+| season | Year of the season |
+| round | Match round number |
 
-4. **Competition**
-   - Properties: name, season, type (league/cup), tier
-   - Unique ID: competition_id
+#### 2. Copa do Brasil Matches
+**File**: `Brazilian_Cup_Matches.csv` (1,337 matches)
+**Source**: https://www.kaggle.com/datasets/ricardomattos05/jogos-do-campeonato-brasileiro
+**License**: CC BY 4.0
 
-5. **Stadium**
-   - Properties: name, city, capacity, opened_year
-   - Unique ID: stadium_id
+| Column | Description |
+|--------|-------------|
+| round | Cup round |
+| datetime | Match date and time |
+| home_team | Home team name |
+| away_team | Away team name |
+| home_goal | Home team goals |
+| away_goal | Away team goals |
+| season | Year |
 
-6. **Coach**
-   - Properties: name, nationality, birth_date
-   - Unique ID: coach_id
+#### 3. Copa Libertadores Matches
+**File**: `Libertadores_Matches.csv` (1,255 matches)
+**Source**: https://www.kaggle.com/datasets/ricardomattos05/jogos-do-campeonato-brasileiro
+**License**: CC BY 4.0
 
-#### Relationships
-- Player → PLAYS_FOR → Team (with date ranges)
-- Player → SCORED_IN → Match (with goal details)
-- Player → ASSISTED_IN → Match
-- Team → COMPETED_IN → Match (home/away)
-- Match → PART_OF → Competition
-- Match → PLAYED_AT → Stadium
-- Player → TRANSFERRED_FROM → Team
-- Player → TRANSFERRED_TO → Team (with transfer_date, fee)
-- Coach → MANAGES → Team (with date ranges)
-- Player → YELLOW_CARD_IN → Match
-- Player → RED_CARD_IN → Match
+| Column | Description |
+|--------|-------------|
+| datetime | Match date and time |
+| home_team | Home team name |
+| away_team | Away team name |
+| home_goal | Home team goals |
+| away_goal | Away team goals |
+| season | Year |
+| stage | Tournament stage (group stage, knockout, etc.) |
 
-### MCP Tools to Implement
+#### 4. Extended Match Statistics
+**File**: `BR-Football-Dataset.csv` (10,296 matches)
+**Source**: https://www.kaggle.com/datasets/cuecacuela/brazilian-football-matches
+**License**: CC0 Public Domain
 
-#### 1. Player Tools
-```
-search_player(name: string, team?: string, position?: string)
-get_player_stats(player_id: string, season?: string)
-get_player_career(player_id: string)
-get_player_transfers(player_id: string)
-```
+| Column | Description |
+|--------|-------------|
+| tournament | Competition name |
+| home | Home team |
+| away | Away team |
+| home_goal, away_goal | Final scores |
+| home_corner, away_corner | Corner kicks |
+| home_attack, away_attack | Attacks |
+| home_shots, away_shots | Shots |
+| time | Kick-off time |
+| date | Match date |
+| ht_result, at_result | Half-time results |
+| total_corners | Total corners in match |
 
-#### 2. Team Tools
-```
-search_team(name: string)
-get_team_roster(team_id: string, season?: string)
-get_team_stats(team_id: string, season?: string)
-get_team_history(team_id: string)
-```
+#### 5. Historical Brasileirão (2003-2019)
+**File**: `novo_campeonato_brasileiro.csv` (6,886 matches)
+**Source**: https://www.kaggle.com/datasets/macedojleo/campeonato-brasileiro-2003-a-2019
+**License**: CC BY 4.0
 
-#### 3. Match Tools
-```
-get_match_details(match_id: string)
-search_matches(team?: string, date_from?: string, date_to?: string)
-get_head_to_head(team1_id: string, team2_id: string)
-get_match_scorers(match_id: string)
-```
+| Column | Description |
+|--------|-------------|
+| ID | Unique match identifier |
+| Data | Match date (DD/MM/YYYY format) |
+| Ano | Year |
+| Rodada | Round number |
+| Equipe_mandante | Home team |
+| Equipe_visitante | Away team |
+| Gols_mandante | Home goals |
+| Gols_visitante | Away goals |
+| Mandante_UF, Visitante_UF | Team states |
+| Vencedor | Winner (Mandante/Visitante/Empate) |
+| Arena | Stadium name |
 
-#### 4. Competition Tools
-```
-get_competition_standings(competition_id: string, season: string)
-get_competition_top_scorers(competition_id: string, season: string)
-get_competition_matches(competition_id: string, season: string)
-```
+### Player Data
 
-#### 5. Analysis Tools
-```
-find_common_teammates(player1_id: string, player2_id: string)
-get_rivalry_stats(team1_id: string, team2_id: string)
-find_players_by_career_path(criteria: object)
-```
+#### 6. FIFA Player Database
+**File**: `fifa_data.csv` (18,207 players)
+**Source**: https://www.kaggle.com/datasets/youssefelbadry10/fifa-players-data
+**License**: Apache 2.0
 
----
-
-## Demo Question Set
-
-### Category 1: Simple Lookups
-*Test basic entity retrieval*
-
-1. "Who scored the most goals for Flamengo in 2023?"
-2. "What teams has Neymar played for in his career?"
-3. "When was the last match between Palmeiras and São Paulo?"
-4. "Tell me about Pelé's career statistics"
-5. "What is Corinthians' home stadium?"
-
-### Category 2: Relationship Queries
-*Test graph traversal*
-
-6. "Which players have played for both Corinthians and Palmeiras?"
-7. "Show me all Brazilian players who moved to European clubs in 2024"
-8. "What teams did Ronaldo Nazário play for during his career?"
-9. "Who were Neymar's teammates at Santos?"
-10. "Find all players who scored in a Flamengo vs Fluminense match"
-
-### Category 3: Aggregate & Statistical Analysis
-*Test data aggregation*
-
-11. "Which team has won the most Brasileirão titles?"
-12. "Who are the top 5 goal scorers in Brazilian Serie A history?"
-13. "What's Flamengo's win rate against Internacional in the last 10 years?"
-14. "Which stadium has hosted the most championship finals?"
-15. "What's the average number of goals per match in Serie A 2023?"
-
-### Category 4: Complex Multi-hop Queries
-*Test complex reasoning across relationships*
-
-16. "Find players who scored in a Copa do Brasil final and later played in Europe"
-17. "Which coaches have managed multiple championship-winning teams?"
-18. "Show me teammates of Neymar at Santos who also made it to European leagues"
-19. "Compare the career trajectories of Ronaldo, Ronaldinho, and Neymar"
-20. "Which players have won championships with three different Brazilian teams?"
-
-### Category 5: Contextual & Historical
-*Test knowledge integration*
-
-21. "Why is Flamengo vs Fluminense called Fla-Flu?"
-22. "What makes the Paulista championship (Paulistão) significant?"
-23. "Explain the significance of Maracanã stadium in Brazilian football"
-24. "Who are considered the greatest Brazilian strikers of all time?"
-25. "What was special about Brazil's 1970 World Cup team?"
+Key columns include:
+| Column | Description |
+|--------|-------------|
+| ID | Unique player identifier |
+| Name | Player name |
+| Age | Player age |
+| Nationality | Country |
+| Overall | FIFA overall rating |
+| Potential | FIFA potential rating |
+| Club | Current club |
+| Position | Playing position |
+| Jersey Number | Shirt number |
+| Height, Weight | Physical attributes |
+| Various skill ratings | Crossing, Finishing, Dribbling, etc. |
 
 ---
 
-## Demo Flow (Recommended Sequence)
+## Additional Data Sources (Optional)
 
-### Act 1: Introduction (Simple Queries)
-1. **Start**: "Tell me about Pelé's career"
-   - *Shows basic player lookup and stats*
-   
-2. **Follow-up**: "How many goals did he score for Santos?"
-   - *Shows filtered statistics*
+These sources may be used to supplement the provided data:
 
-### Act 2: Relationships (Graph Traversal)
-3. **Teammates**: "Which of Pelé's Santos teammates became famous?"
-   - *Demonstrates relationship traversal*
-   
-4. **Rivalries**: "Show me the history of Flamengo vs Fluminense matches"
-   - *Shows head-to-head analysis*
+### API-Football
+- **URL**: https://dashboard.api-football.com/
+- **Features**: Current season data, live scores
+- **Free tier**: Limited daily requests
 
-### Act 3: Complex Analysis (Multi-hop)
-5. **Career Paths**: "Compare the career trajectories of Ronaldo, Ronaldinho, and Neymar"
-   - *Demonstrates multi-entity comparison*
-   
-6. **Pattern Finding**: "Which players have played for both São Paulo clubs and later moved to Europe?"
-   - *Shows complex filtering across multiple relationships*
+### TheSportsDB
+- **URL**: https://www.thesportsdb.com/documentation
+- **Features**: Team logos, player photos, artwork
+- **Free tier**: Test key "123", 2 requests/minute limit
 
-### Act 4: Synthesis (Reasoning)
-7. **Context**: "Why is the São Paulo vs Corinthians derby so important?"
-   - *Requires synthesis of historical context and statistics*
-   
-8. **Insights**: "What trends do you see in Brazilian players moving to Europe over the past decade?"
-   - *Demonstrates analytical capabilities using graph data*
+### Wikipedia/DBpedia
+- Historical context and notable player/team information
 
 ---
 
-## Technical Implementation Notes
+## Required Capabilities
 
-### Graph Database Options
-- **Neo4j**: Best for complex relationship queries
-- **NetworkX** (Python): Good for demos, in-memory
-- **SQLite with JSON**: Simple, portable, good enough for demo
+The MCP server must support queries in these categories:
 
-### MCP Server Framework
-```python
-# Pseudo-code structure
-from mcp.server import Server
-from mcp.types import Tool, TextContent
+### 1. Match Queries
 
-server = Server("brazilian-soccer-kb")
+**Find matches by criteria:**
+- By team (home, away, or either)
+- By date range
+- By competition (Brasileirão, Copa do Brasil, Libertadores)
+- By season
 
-@server.tool()
-async def search_player(name: str) -> list[TextContent]:
-    # Query graph database
-    # Return player information
-    pass
+**Example questions:**
+- "Show me all Flamengo vs Fluminense matches"
+- "What matches did Palmeiras play in 2023?"
+- "Find all Copa do Brasil finals"
 
-@server.tool()
-async def get_player_stats(player_id: str) -> list[TextContent]:
-    # Query graph for player statistics
-    pass
+**Example answer format:**
+```
+Flamengo vs Fluminense (Fla-Flu derby):
+- 2023-09-03: Flamengo 2-1 Fluminense (Brasileirão Round 22)
+- 2023-05-28: Fluminense 1-0 Flamengo (Brasileirão Round 8)
+- ... (15 more matches in dataset)
 
-# Additional tools...
+Head-to-head in dataset: Flamengo 12 wins, Fluminense 8 wins, 7 draws
 ```
 
-### Data Pipeline
-1. **Extract**: Download Kaggle datasets
-2. **Transform**: Clean and structure data
-3. **Load**: Build knowledge graph
-4. **Index**: Create search indices for fast lookup
-5. **Serve**: Expose via MCP tools
+### 2. Team Queries
 
-### Performance Considerations
-- Pre-compute common aggregations (top scorers, team stats)
-- Cache frequently accessed data
-- Index player names, team names for fast search
-- Limit result sets to prevent overwhelming responses
+**Find team information:**
+- Match history and statistics
+- Win/loss/draw records
+- Goals scored/conceded
+- Performance by competition
 
----
+**Example questions:**
+- "What is Corinthians' home record in 2022?"
+- "Which team scored the most goals in Serie A 2023?"
+- "Compare Palmeiras and Santos head-to-head"
 
-## Expected Claude Interaction Pattern
-
-**User asks**: "Which players have played for both Corinthians and Palmeiras?"
-
-**Claude's internal process**:
-1. Uses `search_team("Corinthians")` → gets team_id_1
-2. Uses `search_team("Palmeiras")` → gets team_id_2
-3. Uses `get_team_roster(team_id_1)` → gets list of players
-4. Uses `get_team_roster(team_id_2)` → gets list of players
-5. Finds intersection of player lists
-6. Uses `get_player_career()` for each to verify timing
-
-**Claude's response**: 
-"I found 3 players who played for both rival clubs: [Names]. Notably, [Player X] played for Corinthians from [dates] and later moved to Palmeiras in [year], which was controversial given the rivalry..."
-
----
-
-## Success Metrics for Demo
-
-### Technical Success
-- ✓ All MCP tools respond correctly
-- ✓ Query response time < 2 seconds
-- ✓ Can handle 25+ sample questions
-- ✓ No errors or timeouts
-
-### Demo Impact
-- ✓ Shows clear value of knowledge graphs
-- ✓ Demonstrates complex reasoning
-- ✓ Highlights relationship traversal
-- ✓ Proves natural language interface works
-
-### Audience Engagement
-- ✓ Answers are accurate and detailed
-- ✓ Responses feel natural, not robotic
-- ✓ Shows insights not obvious from raw data
-- ✓ Demonstrates "aha moments"
-
----
-
-## Next Steps
-
-### Phase 1: Data Preparation (Week 1)
-1. Download Brazilian Football Matches dataset from Kaggle
-2. Clean and normalize data
-3. Design final graph schema
-4. Load into graph database
-
-### Phase 2: MCP Server Development (Week 2)
-1. Implement core MCP tools
-2. Add caching layer
-3. Test all sample questions
-4. Optimize slow queries
-
-### Phase 3: Integration & Testing (Week 3)
-1. Connect MCP server to Claude
-2. Run through demo script
-3. Refine responses
-4. Add edge cases
-
-### Phase 4: Demo Preparation (Week 4)
-1. Prepare presentation slides
-2. Create backup scenarios
-3. Document known limitations
-4. Practice demo flow
-
----
-
-## Troubleshooting Guide
-
-### Common Issues
-
-**Issue**: Claude doesn't use MCP tools
-- **Fix**: Ensure tool descriptions are clear and use keywords from questions
-
-**Issue**: Slow query responses
-- **Fix**: Add caching, pre-compute aggregations, reduce graph depth
-
-**Issue**: Incomplete data
-- **Fix**: Supplement with API data or acknowledge gaps in demo
-
-**Issue**: Wrong answers
-- **Fix**: Validate data quality, add unit tests for each tool
-
----
-
-## Additional Resources
-
-### Documentation
-- MCP Protocol: https://modelcontextprotocol.io
-- Neo4j Graph Database: https://neo4j.com/docs
-- Kaggle Datasets: https://www.kaggle.com/datasets
-
-### Community
-- MCP Discord/Forum for implementation questions
-- Brazilian soccer data enthusiasts on Reddit (r/soccer)
-- Knowledge graph communities for schema design
-
-### Related Projects
-- Similar implementations with other sports
-- Other MCP knowledge graph examples
-- Graph database best practices
-
----
-
-## Appendix: Data Schema Examples
-
-### Sample Player Node
-```json
-{
-  "player_id": "P12345",
-  "name": "Neymar da Silva Santos Júnior",
-  "birth_date": "1992-02-05",
-  "nationality": "Brazilian",
-  "position": "Forward",
-  "current_team_id": "T789"
-}
+**Example answer format:**
+```
+Corinthians home record (2022 Brasileirão):
+- Matches: 19
+- Wins: 11, Draws: 5, Losses: 3
+- Goals For: 28, Goals Against: 15
+- Win rate: 57.9%
 ```
 
-### Sample Match Node
-```json
-{
-  "match_id": "M67890",
-  "date": "2023-11-15",
-  "home_team_id": "T123",
-  "away_team_id": "T456",
-  "home_score": 2,
-  "away_score": 1,
-  "competition_id": "C001",
-  "stadium_id": "S555"
-}
+### 3. Player Queries
+
+**Find player information:**
+- Search by name
+- Filter by nationality (especially Brazilian players)
+- Filter by club (especially Brazilian clubs)
+- Player ratings and attributes
+
+**Example questions:**
+- "Find all Brazilian players in the dataset"
+- "Who are the highest-rated players at Flamengo?"
+- "Show me all forwards from São Paulo FC"
+
+**Example answer format:**
+```
+Top-rated Brazilian players in dataset:
+1. Neymar Jr - Overall: 92, Position: LW, Club: Paris Saint-Germain
+2. Alisson - Overall: 89, Position: GK, Club: Liverpool
+3. Casemiro - Overall: 89, Position: CDM, Club: Real Madrid
+...
+
+Brazilian players at Brazilian clubs:
+- Flamengo: 8 players (avg rating: 74)
+- Palmeiras: 7 players (avg rating: 72)
+...
 ```
 
-### Sample Relationship
-```json
-{
-  "type": "SCORED_IN",
-  "player_id": "P12345",
-  "match_id": "M67890",
-  "minute": 67,
-  "goal_type": "penalty"
-}
+### 4. Competition Queries
+
+**Find competition information:**
+- Standings by season (calculated from match results)
+- Top scorers (if inferable from data)
+- Match schedules and results
+
+**Example questions:**
+- "Who won the 2019 Brasileirão?"
+- "Show the 2018 Copa Libertadores bracket"
+- "Which teams were relegated in 2020?"
+
+**Example answer format:**
+```
+2019 Brasileirão Final Standings (calculated from matches):
+1. Flamengo - 90 pts (28W, 6D, 4L) - Champion
+2. Santos - 74 pts (22W, 8D, 8L)
+3. Palmeiras - 74 pts (21W, 11D, 6L)
+...
+```
+
+### 5. Statistical Analysis
+
+**Calculate aggregated statistics:**
+- Goals per match averages
+- Team performance trends
+- Head-to-head records
+- Home vs away performance
+
+**Example questions:**
+- "What's the average goals per match in the Brasileirão?"
+- "Which team has the best away record?"
+- "Show me the biggest wins in the dataset"
+
+**Example answer format:**
+```
+Biggest victories in Brasileirão (provided data):
+1. 2012-05-27: Santos 8-0 Bolivar (Libertadores)
+2. 2015-09-13: Palmeiras 6-0 São Paulo
+3. 2019-10-27: Flamengo 5-0 Grêmio
+...
+
+Average goals per match: 2.47
+Home win rate: 47.3%
 ```
 
 ---
 
-## Document Version
-- **Version**: 1.0
-- **Created**: Based on conversation on September 27, 2025
-- **Purpose**: Implementation guide for Brazilian Soccer MCP Knowledge Graph demo
+## Sample Questions and Expected Behaviors
+
+### Simple Lookups
+| Question | Expected Behavior |
+|----------|-------------------|
+| "When did Flamengo last play Corinthians?" | Search match data for most recent match between these teams |
+| "What was the score?" | Return home_goal and away_goal |
+| "Who is Gabriel Barbosa?" | Search FIFA player data by name |
+
+### Relationship Queries
+| Question | Expected Behavior |
+|----------|-------------------|
+| "Which players play for Flamengo?" | Filter FIFA data by Club containing "Flamengo" |
+| "Show me all derbies in 2023" | Find matches where teams are traditional rivals |
+| "What competitions has Palmeiras played in?" | Search all match files for Palmeiras matches |
+
+### Analytical Queries
+| Question | Expected Behavior |
+|----------|-------------------|
+| "Which team has the best home record?" | Calculate win rates from match data |
+| "Who are the top Brazilian players?" | Filter and sort FIFA data |
+| "Compare the 2018 and 2019 seasons" | Aggregate statistics across seasons |
+
+---
+
+## Data Quality Notes
+
+### Team Name Variations
+The datasets use different naming conventions:
+- With state suffix: "Palmeiras-SP", "Flamengo-RJ"
+- Without suffix: "Palmeiras", "Flamengo"
+- Full names: "Sport Club Corinthians Paulista"
+
+**Implementation should normalize team names for consistent matching.**
+
+### Date Formats
+- ISO format: "2023-09-24"
+- Brazilian format: "29/03/2003"
+- With time: "2012-05-19 18:30:00"
+
+**Implementation should handle multiple date formats.**
+
+### Character Encoding
+Brazilian Portuguese text includes special characters:
+- Accents: São Paulo, Grêmio, Avaí
+- Cedilla: Fortaleza Esporte Clube
+
+**Implementation should handle UTF-8 encoding.**
+
+---
+
+## Success Criteria
+
+### Functional Requirements
+- [ ] Can search and return match data from all provided CSV files
+- [ ] Can search and return player data
+- [ ] Can calculate basic statistics (wins, losses, goals)
+- [ ] Can compare teams head-to-head
+- [ ] Handles team name variations correctly
+- [ ] Returns properly formatted responses
+
+### Query Performance
+- [ ] Simple lookups respond in < 2 seconds
+- [ ] Aggregate queries respond in < 5 seconds
+- [ ] No timeout errors
+
+### Data Coverage
+- [ ] All 6 CSV files are loadable and queryable
+- [ ] At least 20 sample questions can be answered
+- [ ] Cross-file queries work (e.g., player + match data)
+
+---
+
+## Testing Approach
+
+Use BDD (Behavior-Driven Development) test scenarios:
+
+```gherkin
+Feature: Match Queries
+
+Scenario: Find matches between two teams
+  Given the match data is loaded
+  When I search for matches between "Flamengo" and "Fluminense"
+  Then I should receive a list of matches
+  And each match should have date, scores, and competition
+
+Scenario: Get team statistics
+  Given the match data is loaded
+  When I request statistics for "Palmeiras" in season "2023"
+  Then I should receive wins, losses, draws, and goals
+```
+
+---
+
+## Document Information
+- **Version**: 2.0
+- **Purpose**: Specification for Brazilian Soccer MCP Server benchmark
+- **Data**: Pre-downloaded Kaggle datasets included in repository
 - **Status**: Ready for implementation
 
 ---
 
-## Contact & Support
-For questions about this implementation:
-- Review MCP documentation
-- Check data source documentation
-- Test incrementally with simple queries first
-- Build complexity gradually
+## References
+
+### MCP Protocol
+- Documentation: https://modelcontextprotocol.io
+
+### Data Sources
+- Kaggle Brazilian Soccer: https://www.kaggle.com/datasets/ricardomattos05/jogos-do-campeonato-brasileiro
+- Brazilian Football Matches: https://www.kaggle.com/datasets/cuecacuela/brazilian-football-matches
+- Campeonato Brasileiro 2003-2019: https://www.kaggle.com/datasets/macedojleo/campeonato-brasileiro-2003-a-2019
+- FIFA Players: https://www.kaggle.com/datasets/youssefelbadry10/fifa-players-data
+
+### Optional APIs
+- API-Football: https://dashboard.api-football.com/
+- TheSportsDB: https://www.thesportsdb.com/documentation
